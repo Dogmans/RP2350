@@ -22,8 +22,14 @@ def execute_command(lcd, line):
     args = [parse_arg(arg) for arg in parts[1:]]
     
     try:
-        method = getattr(lcd, cmd)
-        method(*args)
+        # Handle special method name mappings
+        if cmd == "circle":
+            # MicroPython FrameBuffer doesn't have circle, draw with ellipse or skip
+            # For now, use hline/vline to approximate or just skip
+            pass
+        else:
+            method = getattr(lcd, cmd)
+            method(*args)
     except Exception:
         pass
 

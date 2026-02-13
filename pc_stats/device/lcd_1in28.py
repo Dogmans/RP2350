@@ -107,7 +107,7 @@ class LCD_1inch28(framebuf.FrameBuffer):
         self.write_data(0x20)
 
         self.write_cmd(0x36)
-        self.write_data(0x98)
+        self.write_data(0x90)
 
         self.write_cmd(0x3A)
         self.write_data(0x05)
