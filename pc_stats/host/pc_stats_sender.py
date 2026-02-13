@@ -28,6 +28,28 @@ TOP_PAD = 14
 COLOR_ORDER = os.environ.get("COLOR_ORDER", "RGB").upper()
 
 
+def parse_ui_color(value, default_rgb):
+    if not value:
+        return default_rgb
+    text = value.strip()
+    if "," in text:
+        parts = [p.strip() for p in text.split(",")]
+        if len(parts) == 3:
+            try:
+                return (int(parts[0]), int(parts[1]), int(parts[2]))
+            except ValueError:
+                return default_rgb
+    text = text.lower().replace("#", "")
+    if text.startswith("0x"):
+        text = text[2:]
+    if len(text) == 6:
+        try:
+            return (int(text[0:2], 16), int(text[2:4], 16), int(text[4:6], 16))
+        except ValueError:
+            return default_rgb
+    return default_rgb
+
+
 def rgb565(r, g, b):
     order = COLOR_ORDER
     if order not in {"RGB", "RBG", "GRB", "GBR", "BRG", "BGR"}:
@@ -37,12 +59,20 @@ def rgb565(r, g, b):
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
 
 
+UI_BG = parse_ui_color(os.environ.get("UI_BG"), (255, 255, 255))
+UI_FG = parse_ui_color(os.environ.get("UI_FG"), (0, 0, 0))
+
+COLOR_BG = rgb565(*UI_BG)
+COLOR_FG = rgb565(*UI_FG)
+COLOR_TEXT = COLOR_FG
+COLOR_TEXT_INVERT = COLOR_BG
+
 COLOR_WHITE = rgb565(255, 255, 255)
 COLOR_BLACK = rgb565(0, 0, 0)
 COLOR_RED = rgb565(255, 0, 0)
 COLOR_YELLOW = rgb565(255, 255, 0)
 COLOR_GREEN = rgb565(0, 255, 0)
-COLOR_GRAY = rgb565(180, 180, 180)
+COLOR_GRAY = rgb565(140, 140, 140)
 
 # LibreHardwareMonitor web server JSON URL
 LHM_URL = os.environ.get("LHM_URL", "")
@@ -284,7 +314,7 @@ def draw_text_widget(ser, widget, stats, y):
     
     offset = circle_text_offset(y)
     if offset is not None:
-        send_command(ser, "text", offset + full_text, 10, y, COLOR_BLACK)
+        send_command(ser, "text", offset + full_text, 10, y, COLOR_TEXT)
 
 
 def draw_bar_widget(ser, widget, stats, y):
@@ -309,21 +339,21 @@ def draw_bar_widget(ser, widget, stats, y):
     
     # Draw label to the left of bar if provided
     if label:
-        send_command(ser, "text", offset_spaces + label, 10, y + 1, COLOR_BLACK)
+        send_command(ser, "text", offset_spaces + label, 10, y + 1, COLOR_TEXT)
         label_width = len(label) * 8
         x = x + label_width + 8  # Add spacing after label
     
     # Draw bar outline
-    send_command(ser, "rect", x, y, width, height, COLOR_BLACK)
+    send_command(ser, "rect", x, y, width, height, COLOR_FG)
     # Draw fill
     if fill_width > 2:
-        send_command(ser, "fill_rect", x + 1, y + 1, fill_width - 2, height - 2, COLOR_BLACK)
+        send_command(ser, "fill_rect", x + 1, y + 1, fill_width - 2, height - 2, COLOR_FG)
     
     # Draw value text inside bar
     value_text = f"{value:.0f}%"
     text_x = x + (width // 2) - (len(value_text) * 4)
     text_y = y + 1
-    send_command(ser, "text", value_text, text_x, text_y, COLOR_WHITE)
+    send_command(ser, "text", value_text, text_x, text_y, COLOR_TEXT_INVERT)
 
 
 def draw_colored_bar_widget(ser, widget, stats, y):
@@ -349,12 +379,12 @@ def draw_colored_bar_widget(ser, widget, stats, y):
     
     # Draw label to the left of bar
     if label:
-        send_command(ser, "text", offset_spaces + label, 10, y + 1, COLOR_BLACK)
+        send_command(ser, "text", offset_spaces + label, 10, y + 1, COLOR_TEXT)
         label_width = len(label) * 8
         x = x + label_width + 8  # Add spacing after label
     
     # Draw bar
-    send_command(ser, "rect", x, y, width, height, COLOR_BLACK)
+    send_command(ser, "rect", x, y, width, height, COLOR_FG)
     if fill_width > 2:
         send_command(ser, "fill_rect", x + 1, y + 1, fill_width - 2, height - 2, color)
     
@@ -362,7 +392,7 @@ def draw_colored_bar_widget(ser, widget, stats, y):
     value_text = f"{value:.0f}"
     text_x = x + (width // 2) - (len(value_text) * 4)
     text_y = y + 1
-    send_command(ser, "text", value_text, text_x, text_y, COLOR_BLACK)
+    send_command(ser, "text", value_text, text_x, text_y, COLOR_TEXT)
 
 
 def draw_circle_gauge_widget(ser, widget, stats):
@@ -391,13 +421,13 @@ def draw_circle_gauge_widget(ser, widget, stats):
     text_value = f"{value:.0f}"
     text_x = center_x - len(text_value) * 4  # Approximate center
     text_y = center_y - 4
-    send_command(ser, "text", text_value, text_x, text_y, COLOR_BLACK)
+    send_command(ser, "text", text_value, text_x, text_y, COLOR_TEXT)
     
     # Draw label below
     if label:
         label_x = center_x - len(label) * 4
         label_y = center_y + 10
-        send_command(ser, "text", label, label_x, label_y, COLOR_BLACK)
+        send_command(ser, "text", label, label_x, label_y, COLOR_TEXT)
 
 
 def draw_arc(ser, cx, cy, radius, start_deg, end_deg, color, thickness=1):
@@ -429,14 +459,14 @@ def draw_arc(ser, cx, cy, radius, start_deg, end_deg, color, thickness=1):
 
 def draw_layout(ser, layout, stats):
     """Draw a complete layout."""
-    send_command(ser, "fill", COLOR_WHITE)
+    send_command(ser, "fill", COLOR_BG)
     
     # Draw layout name at top
     title = layout["name"]
     title_y = TOP_PAD
     title_offset = circle_text_offset(title_y)
     if title_offset is not None:
-        send_command(ser, "text", title_offset + title, 10, title_y, COLOR_BLACK)
+        send_command(ser, "text", title_offset + title, 10, title_y, COLOR_TEXT)
     
     # Process widgets
     row_y = [25 + TOP_PAD, 45 + TOP_PAD, 65 + TOP_PAD, 90 + TOP_PAD, 110 + TOP_PAD,
@@ -468,7 +498,7 @@ def draw_layout(ser, layout, stats):
 
 def draw_stats(ser, stats):
     """Send drawing commands to device."""
-    send_command(ser, "fill", COLOR_WHITE)
+    send_command(ser, "fill", COLOR_BG)
 
     cpu_temp = fmt_temp(stats["cpu_temp_c"])
     gpu_temp = fmt_temp(stats["gpu_temp_c"])
@@ -490,7 +520,7 @@ def draw_stats(ser, stats):
     for text, y in lines:
         offset = circle_text_offset(y)
         if offset is not None:
-            send_command(ser, "text", offset + text, 10, y, COLOR_BLACK)
+            send_command(ser, "text", offset + text, 10, y, COLOR_TEXT)
 
     send_command(ser, "show")
 
