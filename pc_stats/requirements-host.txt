@@ -1,3 +1,4 @@
 psutil
 pyserial
 pynvml
+python-dotenv

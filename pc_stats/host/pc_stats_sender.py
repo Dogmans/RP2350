@@ -5,10 +5,16 @@ import os
 import time
 import urllib.request
 import subprocess
+from pathlib import Path
 
 import psutil
 import serial
 import pynvml
+from dotenv import load_dotenv
+
+# Load environment variables from .env file in pc_stats directory
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(env_path)
 
 
 DEFAULT_BAUD = 115200
@@ -26,15 +32,19 @@ PRESENTMON_PATH = os.environ.get("PRESENTMON_PATH", "")
 PRESENTMON_PROCESS_NAME = os.environ.get("PRESENTMON_PROCESS_NAME", "")
 
 CPU_TEMP_LABELS = [
-    "CPU Package",
+    "CCDs Average (Tdie)",      # AMD Ryzen average CCD temp
+    "Core (Tctl/Tdie)",          # AMD Ryzen core temp
+    "CPU Package",               # Intel
     "CPU (Tctl/Tdie)",
-    "CPU CCD",
-    "CPU",
+    "CCD1 (Tdie)",
 ]
 
 
 def parse_float_from_text(text):
     if text is None:
+        return None
+    # Skip if it's a voltage reading
+    if "V" in text and "°C" not in text:
         return None
     cleaned = "".join(ch if (ch.isdigit() or ch == "." or ch == "-") else " " for ch in text)
     for token in cleaned.split():
@@ -71,8 +81,13 @@ def read_lhm_cpu_temp():
     try:
         with urllib.request.urlopen(LHM_URL, timeout=2) as response:
             data = json.loads(response.read().decode("utf-8"))
-        return find_value_by_labels(data, CPU_TEMP_LABELS)
-    except Exception:
+        temp = find_value_by_labels(data, CPU_TEMP_LABELS)
+        if temp is not None and temp < 10:
+            # Likely found wrong sensor, print debug info
+            print(f"DEBUG: Found suspiciously low temp: {temp}C")
+        return temp
+    except Exception as e:
+        print(f"DEBUG: LHM error: {e}")
         return None
 
 

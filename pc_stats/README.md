@@ -21,17 +21,23 @@ The device parses CSV and calls `lcd.{method}(*args)` for rapid prototyping.
 ## Host setup (Windows)
 
 1. Install LibreHardwareMonitor and enable its Remote Web Server.
-   - Set the URL in `LHM_URL` (see host script).
 
 2. Install PresentMon (optional, for FPS).
-   - Set `PRESENTMON_PATH` and `PRESENTMON_PROCESS_NAME` in the host script.
 
-3. Create and use the venv (already configured in this workspace).
+3. Create a `.env` file in `pc_stats/` with your configuration:
+   - Copy `.env.example` to `.env` and edit the values:
+   ```
+   LHM_URL=http://localhost:8085/data.json
+   PRESENTMON_PATH=C:/path/to/presentmon.exe
+   PRESENTMON_PROCESS_NAME=YourGame.exe
+   ```
 
-4. Install Python dependencies:
+4. Create and use the venv (already configured in this workspace).
+
+5. Install Python dependencies:
    - `D:/Documents/git/RP2350/.venv/Scripts/python.exe -m pip install -r pc_stats/requirements-host.txt`
 
-5. Run the host sender:
+6. Run the host sender:
    - `D:/Documents/git/RP2350/.venv/Scripts/python.exe pc_stats/host/pc_stats_sender.py --port COM8`
 
 ## Device setup (MicroPython)
