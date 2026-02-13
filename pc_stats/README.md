@@ -1,15 +1,22 @@
 # PC Stats Display (RP2350-LCD-1.28)
 
-This sends PC stats over USB serial (CDC) to the RP2350-LCD-1.28 and renders them on the LCD.
+This sends CSV drawing commands over USB serial (CDC) to the RP2350-LCD-1.28 to render PC stats on the circular LCD.
+
+The host gathers stats and sends framebuffer commands like:
+- `fill,65535` (clear screen)
+- `text,CPU T: 45.0C,10,40,0` (draw text with circular offset)
+- `show` (flush to display)
+
+The device parses CSV and calls `lcd.{method}(*args)` for rapid prototyping.
 
 ## What will be displayed
 
-- CPU temperature (easy with LibreHardwareMonitor web server)
-- GPU temperature (easy with NVIDIA NVML)
+- CPU temperature (via LibreHardwareMonitor web server)
+- GPU temperature (via NVIDIA NVML)
 - FPS (optional, via PresentMon CLI)
-- CPU load percent (easy with psutil)
-- GPU load percent (easy with NVIDIA NVML)
-- RAM used / total (easy with psutil)
+- CPU load percent (via psutil)
+- GPU load percent (via NVIDIA NVML)
+- RAM used / total (via psutil)
 
 ## Host setup (Windows)
 
@@ -25,7 +32,7 @@ This sends PC stats over USB serial (CDC) to the RP2350-LCD-1.28 and renders the
    - `D:/Documents/git/RP2350/.venv/Scripts/python.exe -m pip install -r pc_stats/requirements-host.txt`
 
 5. Run the host sender:
-   - `D:/Documents/git/RP2350/.venv/Scripts/python.exe pc_stats/host/pc_stats_sender.py --port COM5`
+   - `D:/Documents/git/RP2350/.venv/Scripts/python.exe pc_stats/host/pc_stats_sender.py --port COM8`
 
 ## Device setup (MicroPython)
 
@@ -48,7 +55,15 @@ This sends PC stats over USB serial (CDC) to the RP2350-LCD-1.28 and renders the
    - The script creates `pc_stats/.venv-deploy` and installs `requirements-deploy.txt` automatically.
    - Add `-AsMain` to also copy `main.py`.
 
+## Architecture
+
+- **Host**: Gathers stats, formats text, calculates circular display offsets, sends CSV commands
+- **Device**: Parses CSV lines, calls `lcd.{method}(*args)` using `getattr`, minimal logic
+
+This "remote framebuffer" approach keeps the device simple and makes iteration fast - you can manually send commands via Serial terminal for debugging.
+
 ## Notes
 
 - FPS collection depends on PresentMon output format and may need flag tweaks.
 - If CPU temp is missing, confirm LibreHardwareMonitor web server is enabled and the URL is correct.
+- Text lines near top/bottom are padded with spaces to fit the circular display.

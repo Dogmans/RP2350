@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import time
 import urllib.request
@@ -12,6 +13,10 @@ import pynvml
 
 DEFAULT_BAUD = 115200
 DEFAULT_INTERVAL_SEC = 1.0
+SCREEN_WIDTH = 240
+SCREEN_HEIGHT = 240
+COLOR_WHITE = 0xFFFF
+COLOR_BLACK = 0x0000
 
 # LibreHardwareMonitor web server JSON URL
 LHM_URL = os.environ.get("LHM_URL", "")
@@ -126,27 +131,106 @@ def read_gpu_stats(handle):
         }
 
 
-def build_payload(gpu_handle):
+def gather_stats(gpu_handle):
     cpu_temp = read_lhm_cpu_temp()
     cpu_load = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     fps = read_presentmon_fps()
     gpu_stats = read_gpu_stats(gpu_handle)
 
-    payload = {
+    return {
         "cpu_temp_c": cpu_temp,
         "cpu_load": float(cpu_load),
         "ram_used_mb": float(mem.used) / (1024 * 1024),
         "ram_total_mb": float(mem.total) / (1024 * 1024),
         "fps": fps,
+        **gpu_stats,
     }
-    payload.update(gpu_stats)
-    return payload
+
+
+def fmt_temp(value):
+    if value is None:
+        return "--"
+    return f"{value:.1f}C"
+
+
+def fmt_percent(value):
+    if value is None:
+        return "--"
+    return f"{value:.0f}%"
+
+
+def fmt_fps(value):
+    if value is None:
+        return "--"
+    return f"{value:.0f}"
+
+
+def fmt_mem(used_mb, total_mb):
+    if used_mb is None or total_mb is None:
+        return "--/--"
+    return f"{used_mb:.0f}/{total_mb:.0f}MB"
+
+
+def circle_text_offset(y, base_x=10, font_w=8, font_h=8, edge_padding=4):
+    """Calculate horizontal offset for circular display."""
+    center_x = SCREEN_WIDTH // 2
+    center_y = SCREEN_HEIGHT // 2
+    radius = min(SCREEN_WIDTH, SCREEN_HEIGHT) // 2
+    line_center = y + (font_h // 2)
+    dy = line_center - center_y
+
+    if dy * dy >= radius * radius:
+        return None
+
+    max_half = int(math.sqrt((radius * radius) - (dy * dy)))
+    left_x = center_x - max_half + edge_padding
+
+    if left_x < base_x:
+        left_x = base_x
+
+    spaces_needed = (left_x - base_x + font_w - 1) // font_w
+    return " " * spaces_needed
+
+
+def send_command(ser, cmd, *args):
+    """Send CSV command to device."""
+    line = ",".join([cmd] + [str(arg) for arg in args]) + "\n"
+    ser.write(line.encode("utf-8"))
+
+
+def draw_stats(ser, stats):
+    """Send drawing commands to device."""
+    send_command(ser, "fill", COLOR_WHITE)
+
+    cpu_temp = fmt_temp(stats["cpu_temp_c"])
+    gpu_temp = fmt_temp(stats["gpu_temp_c"])
+    fps = fmt_fps(stats["fps"])
+    cpu_load = fmt_percent(stats["cpu_load"])
+    gpu_load = fmt_percent(stats["gpu_load"])
+    ram = fmt_mem(stats["ram_used_mb"], stats["ram_total_mb"])
+
+    lines = [
+        ("PC STATS", 10),
+        (f"CPU T: {cpu_temp}", 40),
+        (f"GPU T: {gpu_temp}", 60),
+        (f"FPS:   {fps}", 80),
+        (f"CPU %: {cpu_load}", 100),
+        (f"GPU %: {gpu_load}", 120),
+        (f"RAM:   {ram}", 140),
+    ]
+
+    for text, y in lines:
+        offset = circle_text_offset(y)
+        if offset is not None:
+            send_command(ser, "text", offset + text, 10, y, COLOR_BLACK)
+
+    send_command(ser, "show")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", required=True, help="Serial port (e.g., COM5)")
+    parser.add_argument("--port", required=True, help="Serial port (e.g., COM8)")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUD)
     parser.add_argument("--interval", type=float, default=DEFAULT_INTERVAL_SEC)
     args = parser.parse_args()
@@ -155,10 +239,10 @@ def main():
     gpu_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
 
     with serial.Serial(args.port, args.baud, timeout=1) as ser:
+        time.sleep(2)
         while True:
-            payload = build_payload(gpu_handle)
-            line = json.dumps(payload, separators=(",", ":")) + "\n"
-            ser.write(line.encode("utf-8"))
+            stats = gather_stats(gpu_handle)
+            draw_stats(ser, stats)
             time.sleep(args.interval)
 
 
