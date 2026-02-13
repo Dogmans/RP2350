@@ -24,9 +24,9 @@ def execute_command(lcd, line):
     try:
         # Handle special method name mappings
         if cmd == "circle":
-            # MicroPython FrameBuffer doesn't have circle, draw with ellipse or skip
-            # For now, use hline/vline to approximate or just skip
-            pass
+            if len(args) >= 4:
+                x, y, r, color = args[:4]
+                lcd.ellipse(x, y, r, r, color)
         else:
             method = getattr(lcd, cmd)
             method(*args)

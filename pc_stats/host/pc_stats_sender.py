@@ -24,6 +24,7 @@ DEFAULT_INTERVAL_SEC = 1.0
 LAYOUT_CYCLE_SEC = 10.0
 SCREEN_WIDTH = 240
 SCREEN_HEIGHT = 240
+TOP_PAD = 14
 COLOR_ORDER = os.environ.get("COLOR_ORDER", "RGB").upper()
 
 
@@ -41,6 +42,7 @@ COLOR_BLACK = rgb565(0, 0, 0)
 COLOR_RED = rgb565(255, 0, 0)
 COLOR_YELLOW = rgb565(255, 255, 0)
 COLOR_GREEN = rgb565(0, 255, 0)
+COLOR_GRAY = rgb565(180, 180, 180)
 
 # LibreHardwareMonitor web server JSON URL
 LHM_URL = os.environ.get("LHM_URL", "")
@@ -369,6 +371,7 @@ def draw_circle_gauge_widget(ser, widget, stats):
     label = widget.get("label", "")
     center_y = widget.get("center_y", SCREEN_HEIGHT // 2)
     radius = widget.get("radius", 40)
+    thickness = widget.get("thickness", 15)
     min_val = widget.get("min", 0)
     max_val = widget.get("max", 100)
     
@@ -376,12 +379,13 @@ def draw_circle_gauge_widget(ser, widget, stats):
     value = STAT_VALUES.get(stat, lambda s: 0)(stats)
     ratio = max(0, min(1, (value - min_val) / (max_val - min_val)))
     
-    # Draw outer circle
-    send_command(ser, "circle", center_x, center_y, radius, COLOR_BLACK)
-    
-    # Draw arc (simplified - just draw segments)
-    # For now, draw filled circle for demo (full arc implementation needs more complex drawing)
-    # TODO: Implement proper arc drawing with multiple line segments
+    # Draw ring background
+    draw_arc(ser, center_x, center_y, radius, 135, -135, COLOR_GRAY, thickness=thickness)
+
+    # Draw value arc
+    sweep = 270
+    end_angle = 135 - (sweep * ratio)
+    draw_arc(ser, center_x, center_y, radius, 135, end_angle, interpolate_color(value, min_val, max_val), thickness=thickness)
     
     # Draw center value
     text_value = f"{value:.0f}"
@@ -396,34 +400,64 @@ def draw_circle_gauge_widget(ser, widget, stats):
         send_command(ser, "text", label, label_x, label_y, COLOR_BLACK)
 
 
+def draw_arc(ser, cx, cy, radius, start_deg, end_deg, color, thickness=1):
+    """Draw an arc using short line segments."""
+    step = 4
+    if end_deg > start_deg:
+        step = abs(step)
+    else:
+        step = -abs(step)
+
+    def point_at(r, deg):
+        rad = math.radians(deg)
+        return (int(cx + r * math.cos(rad)), int(cy - r * math.sin(rad)))
+
+    for t in range(thickness):
+        r = radius - t
+        angle = start_deg
+        while True:
+            next_angle = angle + step
+            if (step > 0 and next_angle > end_deg) or (step < 0 and next_angle < end_deg):
+                next_angle = end_deg
+            x1, y1 = point_at(r, angle)
+            x2, y2 = point_at(r, next_angle)
+            send_command(ser, "line", x1, y1, x2, y2, color)
+            if next_angle == end_deg:
+                break
+            angle = next_angle
+
+
 def draw_layout(ser, layout, stats):
     """Draw a complete layout."""
     send_command(ser, "fill", COLOR_WHITE)
     
     # Draw layout name at top
     title = layout["name"]
-    title_x = (SCREEN_WIDTH // 2) - (len(title) * 4)
-    send_command(ser, "text", title, title_x, 5, COLOR_BLACK)
+    title_y = TOP_PAD
+    title_offset = circle_text_offset(title_y)
+    if title_offset is not None:
+        send_command(ser, "text", title_offset + title, 10, title_y, COLOR_BLACK)
     
     # Process widgets
-    row_y = [25, 45, 65, 90, 110, 130, 150, 170, 190, 210]
+    row_y = [25 + TOP_PAD, 45 + TOP_PAD, 65 + TOP_PAD, 90 + TOP_PAD, 110 + TOP_PAD,
+             130 + TOP_PAD, 150 + TOP_PAD, 170 + TOP_PAD, 190 + TOP_PAD, 210 + TOP_PAD]
     
     for widget in layout["widgets"]:
         widget_type = widget["type"]
         
         if widget_type == "text":
             row = widget.get("row", 0)
-            y = row_y[row] if row < len(row_y) else 20 + row * 20
+            y = row_y[row] if row < len(row_y) else TOP_PAD + 20 + row * 20
             draw_text_widget(ser, widget, stats, y)
             
         elif widget_type == "bar":
             row = widget.get("row", 0)
-            y = row_y[row] if row < len(row_y) else 20 + row * 20
+            y = row_y[row] if row < len(row_y) else TOP_PAD + 20 + row * 20
             draw_bar_widget(ser, widget, stats, y)
             
         elif widget_type == "colored_bar":
             row = widget.get("row", 0)
-            y = row_y[row] if row < len(row_y) else 20 + row * 20
+            y = row_y[row] if row < len(row_y) else TOP_PAD + 20 + row * 20
             draw_colored_bar_widget(ser, widget, stats, y)
             
         elif widget_type == "circle_gauge":
@@ -444,13 +478,13 @@ def draw_stats(ser, stats):
     ram = fmt_mem(stats["ram_used_mb"], stats["ram_total_mb"])
 
     lines = [
-        ("PC STATS", 10),
-        (f"CPU T: {cpu_temp}", 40),
-        (f"GPU T: {gpu_temp}", 60),
-        (f"FPS:   {fps}", 80),
-        (f"CPU %: {cpu_load}", 100),
-        (f"GPU %: {gpu_load}", 120),
-        (f"RAM:   {ram}", 140),
+        ("PC STATS", 10 + TOP_PAD),
+        (f"CPU T: {cpu_temp}", 40 + TOP_PAD),
+        (f"GPU T: {gpu_temp}", 60 + TOP_PAD),
+        (f"FPS:   {fps}", 80 + TOP_PAD),
+        (f"CPU %: {cpu_load}", 100 + TOP_PAD),
+        (f"GPU %: {gpu_load}", 120 + TOP_PAD),
+        (f"RAM:   {ram}", 140 + TOP_PAD),
     ]
 
     for text, y in lines:
@@ -477,6 +511,10 @@ def main():
 
     with serial.Serial(args.port, args.baud, timeout=1) as ser:
         time.sleep(2)
+        pid = os.getpid()
+        print(f"Sender PID: {pid}")
+        pid_path = Path(__file__).with_name("sender.pid")
+        pid_path.write_text(f"{pid}\n", encoding="utf-8")
         while True:
             # Check if we should cycle layouts
             if not args.no_cycle and time.time() - last_layout_switch >= LAYOUT_CYCLE_SEC:

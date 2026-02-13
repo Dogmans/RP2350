@@ -33,7 +33,7 @@ LAYOUTS = [
     {
         "name": "Gaming Focus",
         "widgets": [
-            {"type": "circle_gauge", "stat": "fps", "center_y": 90, "label": "FPS", "min": 0, "max": 144, "radius": 50},
+            {"type": "circle_gauge", "stat": "fps", "center_y": 70, "label": "FPS", "min": 0, "max": 144, "radius": 45},
             {"type": "bar", "stat": "gpu_temp", "row": 4, "label": "GPU T", "min": 30, "max": 90, "width": 120, "height": 10},
             {"type": "bar", "stat": "gpu_load", "row": 5, "label": "GPU %", "min": 0, "max": 100, "width": 120, "height": 10},
         ]
