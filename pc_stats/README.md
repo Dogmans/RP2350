@@ -73,3 +73,45 @@ This "remote framebuffer" approach keeps the device simple and makes iteration f
 - FPS collection depends on PresentMon output format and may need flag tweaks.
 - If CPU temp is missing, confirm LibreHardwareMonitor web server is enabled and the URL is correct.
 - Text lines near top/bottom are padded with spaces to fit the circular display.
+
+## Configuration (.env)
+
+The `.env` file in `pc_stats/` lets you customize:
+
+- **LHM_URL**: LibreHardwareMonitor web server URL (for CPU stats)
+- **PRESENTMON_PATH**: Path to PresentMon executable (for FPS)
+- **PRESENTMON_PROCESS_NAME**: Name of the game/process to monitor FPS
+- **UI_BG**: Background color for the display, as `R,G,B` (e.g. `0,0,0` for black)
+- **UI_FG**: Foreground/text color, as `R,G,B` (e.g. `255,255,255` for white)
+
+Example `.env`:
+```
+LHM_URL=http://localhost:8085/data.json
+PRESENTMON_PATH=C:/path/to/presentmon.exe
+PRESENTMON_PROCESS_NAME=YourGame.exe
+UI_BG=0,0,0
+UI_FG=255,255,255
+```
+
+If `UI_BG` and `UI_FG` are not set, the display defaults to black text on a white background.
+
+Restart the sender after changing `.env` to apply new colors.
+
+## Layouts
+
+Display layouts are defined in `host/layouts.py` as Python dictionaries. Each layout specifies a set of widgets and their positions/types:
+
+- **Overview**: Text and bar widgets for CPU/GPU stats, FPS, RAM.
+- **Detailed CPU/GPU**: Colored bars for temperatures, standard bars for load, FPS.
+- **Circle Gauges**: Circular gauge widgets for CPU/GPU temps.
+- **Gaming Focus**: Large FPS circle gauge, GPU temp/load bars.
+
+Each widget entry includes:
+- `type`: Widget type (`text`, `bar`, `colored_bar`, `circle_gauge`)
+- `stat`: Stat key (e.g. `cpu_temp`, `gpu_load`)
+- `label`: Display label
+- Positioning: `row`, `center_y`, `radius`, `width`, `height`, etc.
+
+Layouts are selected in the host code and determine what stats are shown and how they are rendered on the display.
+
+Stat formatting and extraction is handled by `STAT_FORMATTERS` and `STAT_VALUES` in `layouts.py`.
